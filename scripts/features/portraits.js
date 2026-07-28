@@ -389,7 +389,7 @@ const FRAME = {
     try {
       const actor = game.actors?.get(actorId);
       const raw = actor ? foundry.utils.getProperty(actor, FLAG_PORTRAIT_BREATHING_MULTIPLIER) : null;
-      return clampNumber(raw, 0, 3, 1);
+      return clampNumber(raw ?? 1, 0, 3, 1);
     } catch (e) {
       return 1;
     }
