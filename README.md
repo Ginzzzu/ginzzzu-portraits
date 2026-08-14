@@ -39,6 +39,7 @@ After installing, you’ll find a PC/NPC control panel at the bottom of your scr
 - **Clear the screen** by pressing the `Clear All` button (red, top-right).
 - **Toggle panel visibility** by pressing the `Show/Hide Panel` button (gray, top-right).
 - **Folder selection**: use the folder dropdown to select an **actors** folder with portraits.
+- **Sorting**: order portraits by name, folder name, or the manual/alphabetical folder order configured in Foundry.
 - **Quick search**: use `Search` field to filter portraits by name or folder path.
 
 ## Portrait controls

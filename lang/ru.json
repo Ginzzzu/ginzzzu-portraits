@@ -21,6 +21,7 @@
       "fromScene": "(эта сцена)",
       "sortByName": "по имени",
       "sortByFolder": "по папке",
+      "sortByFoundry": "порядок папок Foundry",
       "folder": "Папка:",
       "allFolders": "(все папки)",
       "groupPrefix": "(Группа)",
@@ -340,7 +341,7 @@
         },
         "npcDockSort": {
           "name": "NPC Dock: сортировка",
-          "hint": "Определяет порядок карточек NPC в доке."
+          "hint": "Определяет порядок карточек NPC в доке. Режим порядка Foundry повторяет ручную или алфавитную сортировку, настроенную отдельно для каждой папки Actor."
         },
         "npcDockWidth": {
           "name": "NPC Dock: ширина панели",

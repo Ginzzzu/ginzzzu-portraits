@@ -1087,7 +1087,8 @@ Hooks.once("init", () => {
     type: String,
     choices: {
       "name-asc": game.i18n.localize("GINZZZUPORTRAITS.sortByName"),
-      "folder-asc": game.i18n.localize("GINZZZUPORTRAITS.sortByFolder")
+      "folder-asc": game.i18n.localize("GINZZZUPORTRAITS.sortByFolder"),
+      "folder-foundry": game.i18n.localize("GINZZZUPORTRAITS.sortByFoundry")
     },
     default: "name-asc",
     requiresReload: true

@@ -10,6 +10,10 @@ import {
   getActorPortraitDisplayName,
   getActorPortraitImage
 } from "../core/portraitPresentation.js";
+import {
+  createFoundryActorDirectoryComparator,
+  FOUNDRY_FOLDER_SORT_MODE
+} from "../core/foundryFolderSort.js";
 
 (()=>{
   const isGmClient = () => !!game.user?.isGM;
@@ -356,6 +360,7 @@ import {
         <select id="ginzzzu-npc-sort">
           <option value="name-asc">${game.i18n.localize("GINZZZUPORTRAITS.sortByName")}</option>
           <option value="folder-asc">${game.i18n.localize("GINZZZUPORTRAITS.sortByFolder")}</option>
+          <option value="${FOUNDRY_FOLDER_SORT_MODE}">${game.i18n.localize("GINZZZUPORTRAITS.sortByFoundry")}</option>
         </select>
 
         <label>${game.i18n.localize("GINZZZUPORTRAITS.displaySrc")}</label>
@@ -738,6 +743,11 @@ import {
         if (byFolder !== 0) return byFolder;
         return (a.name||"").localeCompare(b.name||"", game.i18n.lang || undefined, { sensitivity:"base" });
       });
+    } else if (mode === FOUNDRY_FOLDER_SORT_MODE) {
+      const actorFolders = game.folders?.filter?.(folder => folder?.type === "Actor") ?? [];
+      rest.sort(createFoundryActorDirectoryComparator(actorFolders, {
+        locale: game.i18n.lang || undefined
+      }));
     } else {
       rest.sort((a, b) =>
         (a.name||"").localeCompare(b.name||"", game.i18n.lang || undefined, { sensitivity:"base" })
@@ -1049,6 +1059,9 @@ import {
     // Image/emotion changes are handled above without rebuilding the dock.
     const structuralPaths = ["name", "type", "folder"];
     if (structuralPaths.some(path => hasChangedPath(diff, path)))
+      scheduleRebuild();
+
+    if (getSortMode() === FOUNDRY_FOLDER_SORT_MODE && hasChangedPath(diff, "sort"))
       scheduleRebuild();
 
     if (hasAnyChangedModuleFlag(moduleFlagKeys, DOCK_REBUILD_MODULE_FLAGS))

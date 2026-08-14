@@ -21,6 +21,7 @@
     "fromScene": "(current scene)",
     "sortByName": "name",
     "sortByFolder": "folder",
+    "sortByFoundry": "Foundry folder order",
     "folder": "Folder:",
     "allFolders": "(all folders)",
     "groupPrefix": "(Group)",
@@ -340,7 +341,7 @@
       },
       "npcDockSort": {
         "name": "NPC Dock: sorting",
-        "hint": "Controls how NPC cards are ordered in the dock."
+        "hint": "Controls how NPC cards are ordered in the dock. Foundry folder order follows the manual or alphabetical sorting configured for each Actor folder."
       },
       "npcDockWidth": {
         "name": "NPC Dock: panel width",
