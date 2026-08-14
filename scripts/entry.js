@@ -4,6 +4,7 @@
  */
 import "./settings.js";
 import "./keybindings.js";
+import "./features/uiLayoutState.js";
 import "./features/custom-emotions.js";
 import "./features/portraits.js";
 import "./features/npcDock.js";

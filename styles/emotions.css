@@ -220,6 +220,11 @@
     scaleX(var(--ginzzzu-flip-scale-x, 1));
 }
 
+/* Idle portrait motion should not compete with character-sheet text input. */
+body.ginzzzu-text-entry-active #ginzzzu-portrait-layer .ginzzzu-portrait-wrapper {
+  animation-play-state: paused !important;
+}
+
 #ginzzzu-portrait-layer .ginzzzu-portrait-wrapper.emo-custom-motion {
   animation: var(--emotion-animation, none) 0.45s ease-in-out infinite;
 }

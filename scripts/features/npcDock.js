@@ -38,16 +38,26 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     }
     return cachedPCTypes;
   }
-  function getChangedModuleFlagKeys(diff, flat = null) {
+  function hasChangedPath(diff, path) {
+    if (!diff || typeof diff !== "object") return false;
+    if (Object.prototype.hasOwnProperty.call(diff, path)) return true;
+    return foundry.utils.hasProperty(diff, path);
+  }
+
+  function getChangedModuleFlagKeys(diff) {
     const keys = new Set();
     const nested = diff?.flags?.[MODULE_ID];
     if (nested && typeof nested === "object") {
       for (const key of Object.keys(nested)) keys.add(key.replace(/^-=/, ""));
     }
 
-    const flattened = flat || foundry.utils.flattenObject(diff || {});
+    const flattenedContainer = diff?.[`flags.${MODULE_ID}`];
+    if (flattenedContainer && typeof flattenedContainer === "object") {
+      for (const key of Object.keys(flattenedContainer)) keys.add(key.replace(/^-=/, ""));
+    }
+
     const prefix = `flags.${MODULE_ID}.`;
-    for (const key of Object.keys(flattened)) {
+    for (const key of Object.keys(diff || {})) {
       if (key.startsWith(prefix)) keys.add(key.slice(prefix.length).replace(/^-=/, ""));
     }
     return keys;
@@ -930,12 +940,11 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
       if (portraitShownChanged)
         reflectActorFlag(actor);
 
-      const flat = foundry.utils.flattenObject(diff);
       const rel = ["name", "img", "type", "prototypeToken.texture.src", "folder"];
-      if (rel.some(k => k in flat))
+      if (rel.some(path => hasChangedPath(diff, path)))
         scheduleRebuild();
 
-      const moduleFlagKeys = getChangedModuleFlagKeys(diff, flat);
+      const moduleFlagKeys = getChangedModuleFlagKeys(diff);
       if ([...moduleFlagKeys].some(key => DOCK_REBUILD_MODULE_FLAGS.has(key)))
         scheduleRebuild();
     });

@@ -55,25 +55,25 @@ body.ginzzzu-performance-mode #ginzzzu-npc-dock {
 }
 
 /* 1. Панель свёрнута, быстрый чат не активен - минимальный отступ */
-body:has(#sidebar-content:not(.expanded)) #ginzzzu-npc-dock.collapsed {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded) #ginzzzu-npc-dock.collapsed {
   left: calc(100vw - var(--left-sidebar-width) - var(--buttons-total-width) + 52px);
 }
 
 /* 2. Панель свёрнута, быстрый чат активен - отступ на ширину быстрого чата */
-body:has(#sidebar-content:not(.expanded)):has(#chat-notifications:not(.input-hidden)) #ginzzzu-npc-dock.collapsed {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded).ginzzzu-quick-chat-visible #ginzzzu-npc-dock.collapsed {
   left: calc(100vw - var(--left-sidebar-width) - var(--quick-chat-width) - var(--buttons-total-width) + 34px);
 }
 
 /* 5. Панель развёрнута, быстрый чат активен - отступ на ширину панели + быстрый чат + доп. 16px (имеет приоритет) */
-body:has(#sidebar-content.expanded):has(#chat-notifications:not(.input-hidden)) #ginzzzu-npc-dock.collapsed {
+body.ginzzzu-sidebar-expanded.ginzzzu-quick-chat-visible #ginzzzu-npc-dock.collapsed {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--quick-chat-width) - var(--buttons-total-width) + 36px);
 }
-body:has(#sidebar-content.expanded.active-chat):has(#chat-notifications:not(.input-hidden)) #ginzzzu-npc-dock.collapsed {
+body.ginzzzu-sidebar-expanded.ginzzzu-sidebar-active-chat.ginzzzu-quick-chat-visible #ginzzzu-npc-dock.collapsed {
   left: calc(100vw - var(--sidebar-width) - 40px);
 }
 
 /* 4. Панель развёрнута, вкладка НЕ чат, быстрый чат не активен - отступ на ширину панели + доп. кнопки */
-body:has(#sidebar-content.expanded):has(#sidebar-content:not(.active)):has(#chat-notifications.input-hidden) #ginzzzu-npc-dock.collapsed {
+body.ginzzzu-sidebar-expanded:not(.ginzzzu-sidebar-content-active).ginzzzu-quick-chat-present:not(.ginzzzu-quick-chat-visible) #ginzzzu-npc-dock.collapsed {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--buttons-total-width) - var(--extra-buttons-width) + 82px);
 }
 

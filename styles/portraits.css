@@ -363,25 +363,25 @@ div.ginzzzu-portrait-wrapper.ginzzzu-portrait-dimmed {
 }
 
 /* 1. Панель свёрнута, быстрый чат не активен - минимальный отступ */
-body:has(#sidebar-content:not(.expanded)) #ginzzzu-portrait-ui-toggle-btn {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded) #ginzzzu-portrait-ui-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--button-width));
 }
 
 /* 2. Панель свёрнута, быстрый чат активен - отступ на ширину быстрого чата */
-body:has(#sidebar-content:not(.expanded)):has(#chat-notifications:not(.input-hidden)) #ginzzzu-portrait-ui-toggle-btn {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded).ginzzzu-quick-chat-visible #ginzzzu-portrait-ui-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--quick-chat-width) - var(--button-width) - 18px);
 }
 
 /* 5. Панель развёрнута, быстрый чат активен - отступ на ширину панели + быстрый чат + доп. 16px (имеет приоритет) */
-body:has(#sidebar-content.expanded):has(#chat-notifications:not(.input-hidden)) #ginzzzu-portrait-ui-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-quick-chat-visible #ginzzzu-portrait-ui-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--quick-chat-width) - var(--button-width) - 16px);
 }
-body:has(#sidebar-content.expanded.active-chat):has(#chat-notifications:not(.input-hidden)) #ginzzzu-portrait-ui-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-sidebar-active-chat.ginzzzu-quick-chat-visible #ginzzzu-portrait-ui-toggle-btn {
   left: calc(100vw - var(--sidebar-width) - 48px + 8px);
 }
 
 /* 4. Панель развёрнута, вкладка НЕ чат, быстрый чат не активен - отступ на ширину панели + доп. кнопки */
-body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#chat-notifications.input-hidden) #ginzzzu-portrait-ui-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-sidebar-chat-tab-present:not(.ginzzzu-sidebar-chat-tab-active).ginzzzu-quick-chat-present:not(.ginzzzu-quick-chat-visible) #ginzzzu-portrait-ui-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--button-width) - var(--extra-buttons-width));
 }
 
@@ -423,19 +423,19 @@ body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#cha
 }
 
 /* Mirror the same responsive positioning rules as the eye button */
-body:has(#sidebar-content:not(.expanded)) #ginzzzu-player-portrait-toggle-btn {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded) #ginzzzu-player-portrait-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--button-width));
 }
-body:has(#sidebar-content:not(.expanded)):has(#chat-notifications:not(.input-hidden)) #ginzzzu-player-portrait-toggle-btn {
+body.ginzzzu-sidebar-present:not(.ginzzzu-sidebar-expanded).ginzzzu-quick-chat-visible #ginzzzu-player-portrait-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--quick-chat-width) - var(--button-width) - 18px);
 }
-body:has(#sidebar-content.expanded):has(#chat-notifications:not(.input-hidden)) #ginzzzu-player-portrait-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-quick-chat-visible #ginzzzu-player-portrait-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--quick-chat-width) - var(--button-width) - 16px);
 }
-body:has(#sidebar-content.expanded.active-chat):has(#chat-notifications:not(.input-hidden)) #ginzzzu-player-portrait-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-sidebar-active-chat.ginzzzu-quick-chat-visible #ginzzzu-player-portrait-toggle-btn {
   left: calc(100vw - var(--sidebar-width) - 48px + 8px);
 }
-body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#chat-notifications.input-hidden) #ginzzzu-player-portrait-toggle-btn {
+body.ginzzzu-sidebar-expanded.ginzzzu-sidebar-chat-tab-present:not(.ginzzzu-sidebar-chat-tab-active).ginzzzu-quick-chat-present:not(.ginzzzu-quick-chat-visible) #ginzzzu-player-portrait-toggle-btn {
   left: calc(100vw - var(--left-sidebar-width) - var(--sidebar-width) - var(--button-width) - var(--extra-buttons-width));
 }
 
@@ -452,9 +452,10 @@ body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#cha
 #ginzzzu-portrait-layer {
   --ginzzzu-blur-strength: 0px;
   --ginzzzu-blur-speed: 400ms;
+  contain: layout style;
 }
 
-/* Persistent blur pseudo-element with smooth transition */
+/* Keep the costly backdrop surface disabled until blur is actually needed. */
 #ginzzzu-portrait-layer::before {
   content: '';
   position: fixed;
@@ -462,9 +463,15 @@ body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#cha
   left: 0;
   right: 0;
   bottom: 0;
-  backdrop-filter: blur(var(--ginzzzu-blur-strength));
+  backdrop-filter: none;
+  opacity: 0;
   pointer-events: none;
   z-index: 0;
+}
+
+#ginzzzu-portrait-layer.ginzzzu-portrait-blur-active::before {
+  backdrop-filter: blur(var(--ginzzzu-blur-strength));
+  opacity: 1;
   transition: backdrop-filter var(--ginzzzu-blur-speed) ease-out;
 }
 
@@ -474,8 +481,9 @@ body:has(#sidebar-content.expanded):has(#sidebar-tab-chat:not(.active)):has(#cha
   --ginzzzu-blur-speed: var(--ginzzzu-blur-speed-value, 400ms);
 }
 
-#ginzzzu-portrait-layer.ginzzzu-portrait-ui-hidden {
-  --ginzzzu-blur-strength: 0px;
+#ginzzzu-portrait-layer.ginzzzu-portrait-ui-hidden::before {
+  backdrop-filter: none;
+  opacity: 0;
 }
 
 body.ginzzzu-performance-mode #ginzzzu-portrait-layer::before,

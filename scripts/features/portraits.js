@@ -109,6 +109,7 @@ function _toneRound(value) {
 }
 
 const TONE_NEUTRAL_DARKNESS = 0.1;
+const toneStateByRoot = new WeakMap();
 
 function _toneCompute(darkness, strength01) {
   const d = _toneClamp01(darkness);
@@ -180,9 +181,12 @@ function _toneGetDarknessLevel() {
 }
 
 function _toneApplyToRootVars(root = document.getElementById("ginzzzu-portrait-layer")) {
-  const enabled = game.settings.get(MODULE_ID, "portraitToneEnabled");
   if (!root) return;
+  const enabled = game.settings.get(MODULE_ID, "portraitToneEnabled");
+  const previousState = toneStateByRoot.get(root);
+
   if (!enabled) {
+    if (previousState?.enabled === false) return;
     root.style.removeProperty("--tone-brightness");
     root.style.removeProperty("--tone-contrast");
     root.style.removeProperty("--tone-saturate");
@@ -192,14 +196,33 @@ function _toneApplyToRootVars(root = document.getElementById("ginzzzu-portrait-l
     root.style.removeProperty("--tone-blue-post-hue");
     root.style.removeProperty("--tone-filter-transition");
     delete root.dataset.toneNeutral;
+    toneStateByRoot.set(root, { enabled: false, neutral: true, signature: "disabled" });
     return;
   }
+
   const strength = Math.max(0, Math.min(1, Number(game.settings.get(MODULE_ID, "portraitToneStrength")) || 0));
   const d = _toneGetDarknessLevel();
   const { brightness, contrast, saturate, hueDeg, bluePreHueDeg, blueTint, bluePostHueDeg, skipFilterTransition } = _toneCompute(d, strength);
-  const wasNeutral = root.dataset.toneNeutral === "true";
+  const wasNeutral = previousState?.neutral ?? (root.dataset.toneNeutral === "true");
   const isNeutral = skipFilterTransition;
   const skipThisTransition = wasNeutral || isNeutral;
+  const filterTransition = skipThisTransition ? "0ms linear" : `${_ANIM.moveMs}ms ${_ANIM.easing}`;
+  const signature = [
+    brightness,
+    contrast,
+    saturate,
+    hueDeg,
+    bluePreHueDeg,
+    blueTint,
+    bluePostHueDeg,
+    filterTransition,
+    isNeutral
+  ].join("|");
+
+  // PF2e may trigger lightingRefresh repeatedly while a token moves. Avoid
+  // invalidating portrait styles when the effective scene tone is unchanged.
+  if (previousState?.enabled === true && previousState.signature === signature) return;
+
   root.style.setProperty("--tone-brightness", String(brightness));
   root.style.setProperty("--tone-contrast",   String(contrast));
   root.style.setProperty("--tone-saturate",   String(saturate));
@@ -207,8 +230,21 @@ function _toneApplyToRootVars(root = document.getElementById("ginzzzu-portrait-l
   root.style.setProperty("--tone-blue-pre-hue", `${bluePreHueDeg}deg`);
   root.style.setProperty("--tone-blue-tint",  String(blueTint));
   root.style.setProperty("--tone-blue-post-hue", `${bluePostHueDeg}deg`);
-  root.style.setProperty("--tone-filter-transition", skipThisTransition ? "0ms linear" : `${_ANIM.moveMs}ms ${_ANIM.easing}`);
+  root.style.setProperty("--tone-filter-transition", filterTransition);
   root.dataset.toneNeutral = isNeutral ? "true" : "false";
+  toneStateByRoot.set(root, { enabled: true, neutral: isNeutral, signature });
+}
+
+let toneRefreshFrame = null;
+
+function _scheduleToneRefresh() {
+  const root = document.getElementById("ginzzzu-portrait-layer");
+  if (!root?.querySelector(".ginzzzu-portrait-wrapper")) return;
+  if (toneRefreshFrame !== null) return;
+  toneRefreshFrame = requestAnimationFrame(() => {
+    toneRefreshFrame = null;
+    _toneApplyToRootVars();
+  });
 }
 
   // ---- Геометрия «рамки» портретов и анимации ----
@@ -358,6 +394,43 @@ const FRAME = {
 
   const PORTRAIT_BREATHING_ANIMATION_KEY = "__ginzzzuPortraitBreathingAnimation";
   const PORTRAIT_BREATHING_DELAY_SPREAD_MS = 2400;
+  let portraitAnimationActivityFrame = null;
+
+  function isTextEntryElement(element) {
+    if (!(element instanceof Element)) return false;
+    return element.matches(
+      "input:not([type='button']):not([type='checkbox']):not([type='radio']):not([type='range']), textarea, [contenteditable]:not([contenteditable='false']), .ProseMirror"
+    );
+  }
+
+  function syncPortraitAnimationActivity() {
+    portraitAnimationActivityFrame = null;
+    const suspended = isTextEntryElement(document.activeElement);
+    document.body?.classList.toggle("ginzzzu-text-entry-active", suspended);
+
+    const root = document.getElementById("ginzzzu-portrait-layer");
+    if (!root) return;
+
+    for (const wrapper of root.querySelectorAll(".ginzzzu-portrait-wrapper")) {
+      const animation = wrapper[PORTRAIT_BREATHING_ANIMATION_KEY];
+      if (!animation) continue;
+      try {
+        if (suspended && animation.playState === "running") animation.pause();
+        else if (!suspended && animation.playState === "paused") animation.play();
+      } catch (e) {}
+    }
+  }
+
+  function schedulePortraitAnimationActivitySync() {
+    if (portraitAnimationActivityFrame !== null) return;
+    portraitAnimationActivityFrame = requestAnimationFrame(syncPortraitAnimationActivity);
+  }
+
+  function registerPortraitAnimationActivityHandlers() {
+    document.addEventListener("focusin", schedulePortraitAnimationActivitySync, { passive: true });
+    document.addEventListener("focusout", schedulePortraitAnimationActivitySync, { passive: true });
+    syncPortraitAnimationActivity();
+  }
 
   function clampNumber(value, min, max, fallback) {
     const number = Number(value);
@@ -460,6 +533,9 @@ const FRAME = {
           easing: "ease-in-out"
         }
       );
+      if (isTextEntryElement(document.activeElement)) {
+        wrapper[PORTRAIT_BREATHING_ANIMATION_KEY].pause();
+      }
     } catch (e) {
       wrapper.style.setProperty("--ginzzzu-breathe-y", "0px");
       wrapper.style.setProperty("--ginzzzu-breathe-scale", "1");
@@ -2700,6 +2776,7 @@ function _onPortraitClick(ev) {
 
     const root = getDomHud();
     if (!root) return;
+    _toneApplyToRootVars(root);
     const rail = root.querySelector("#ginzzzu-portrait-rail") || root;
 
     const map = domStore();
@@ -3372,6 +3449,8 @@ Hooks.once("ready", () => {
       return;
     }
 
+    registerPortraitAnimationActivityHandlers();
+
     // Поднимем уже отмеченные портреты (если есть)
     for (const actor of game.actors ?? []) {
       let shown = foundry.utils.getProperty(actor, FLAG_PORTRAIT_SHOWN);
@@ -3398,13 +3477,6 @@ Hooks.once("ready", () => {
     try {
       if (!actor?.id) return;
 
-      // Только если у этого актёра уже есть HUD-портрет
-      const root = getDomHud?.();
-      if (!root) return;
-
-      const wrapper = root.querySelector(`.ginzzzu-portrait-wrapper[data-actor-id="${actor.id}"]`);
-      if (!wrapper) return;
-
       // Проверяем, что изменилось именно то, что влияет на картинку эмоции
       const emotionChanged = foundry.utils.hasProperty(changes, FLAG_PORTRAIT_EMOTION);
       const customEmotionsChanged = foundry.utils.hasProperty(changes, FLAG_CUSTOM_EMOTIONS);
@@ -3414,6 +3486,14 @@ Hooks.once("ready", () => {
       const breathingMultiplierChanged = foundry.utils.hasProperty(changes, FLAG_PORTRAIT_BREATHING_MULTIPLIER);
 
       if (!emotionChanged && !customEmotionsChanged && !heightMultiplierChanged && !emotionHeightMultiplierChanged && !customImageChanged && !breathingMultiplierChanged) return;
+
+      // Only touch the HUD after confirming this Actor update is relevant.
+      // PF2e sheets can emit frequent, deeply nested updates while editing.
+      const root = document.getElementById("ginzzzu-portrait-layer");
+      if (!root) return;
+
+      const wrapper = root.querySelector(`.ginzzzu-portrait-wrapper[data-actor-id="${actor.id}"]`);
+      if (!wrapper) return;
 
       const imgEl = wrapper.querySelector("img.ginzzzu-portrait");
       if (!imgEl) return;
@@ -3508,7 +3588,7 @@ Hooks.once("ready", () => {
     }
   });
 
-  Hooks.on("lightingRefresh", () => _toneApplyToRootVars());
+  Hooks.on("lightingRefresh", _scheduleToneRefresh);
 
   // Перераскладка при изменении размера окна
   // Use a debounced handler so rapid resizes trigger a single relayout.
