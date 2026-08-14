@@ -49,6 +49,7 @@ After installing, you’ll find a PC/NPC control panel at the bottom of your scr
 - **Hold the configured action modifier and right-click a portrait** to open its actor sheet. Default: `Ctrl` / `Cmd`.
 - **Drag a portrait** left or right to reorder active portraits on the screen. The shared order is synchronized through the scene and restored when the canvas loads.
 - **Hold the configured keep-position key** when releasing a dragged portrait to keep its manual position, scale, and tilt instead of returning to the automatic layout. Default: `Shift`.
+- When **Reset position on release** is disabled, **double-click a portrait** to reset its manual position, scale, and tilt.
 - **Use the mouse wheel while dragging** to scale the portrait.
 - **Hold the configured transform key** while dragging to adjust scale and tilt without changing the reorder target. Default: `Alt`.
 

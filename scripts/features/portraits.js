@@ -1681,6 +1681,28 @@ const FRAME = {
     }
   }
 
+  function resetPortraitManualTransform(actorId, {
+    root = getDomHud(),
+    animate = true
+  } = {}) {
+    const id = String(actorId || "").trim();
+    if (!id || !root || !canUserReorderPortrait(id, game.user)) return false;
+
+    const wrapper = getWrapperByActorId(id, root);
+    if (!wrapper || isZeroPortraitManualTransform(getAppliedPortraitManualTransform(wrapper, id))) {
+      return false;
+    }
+
+    const resetTransform = normalizePortraitManualTransform(null);
+    const zIndex = setPortraitManualZIndex(id, null, { root });
+    setSyncedPortraitManualTransform(id, resetTransform, {
+      applyLocal: true,
+      animate,
+      zIndex
+    });
+    return true;
+  }
+
   function finishPortraitDrag(ev, { cancelled = false } = {}) {
     const state = activePortraitDrag;
     if (!state) return;
@@ -1935,6 +1957,23 @@ const FRAME = {
     window.addEventListener("pointerup", _onPortraitPointerUp, { passive: false });
     window.addEventListener("pointercancel", _onPortraitPointerCancel, { passive: false });
     window.addEventListener("wheel", _onPortraitWheel, { passive: false });
+  }
+
+  function _onPortraitDoubleClick(ev) {
+    if (ev.type !== "dblclick" || ev.button !== 0) return;
+    if (shouldResetPortraitDragPositionOnRelease()) return;
+    if (isPortraitControlKeyActive(PORTRAIT_KEYBINDINGS.ACTION_MODIFIER, ev)) return;
+    if (shouldIgnorePortraitDragTarget(ev.target)) return;
+
+    const wrapper = ev.currentTarget?.closest?.(".ginzzzu-portrait-wrapper");
+    const actorId = String(wrapper?.dataset?.actorId || "").trim();
+    if (!wrapper || !actorId) return;
+
+    const root = document.getElementById("ginzzzu-portrait-layer");
+    if (!resetPortraitManualTransform(actorId, { root, animate: true })) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
   }
 
   function insertPortraitWrapperBySharedOrder(rail, wrapper) {
@@ -2867,6 +2906,7 @@ function _onPortraitClick(ev) {
     wrapper.addEventListener("auxclick", _onPortraitAuxClick);
     wrapper.addEventListener("contextmenu", _onPortraitClick);
     wrapper.addEventListener("click", _onPortraitActionModifierClick);
+    wrapper.addEventListener("dblclick", _onPortraitDoubleClick);
     wrapper.addEventListener("pointerdown", _onPortraitPointerDown);
     wrapper.addEventListener("dragstart", ev => ev.preventDefault());
 

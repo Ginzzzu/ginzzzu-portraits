@@ -195,7 +195,7 @@
       },
       "portraitDragResetOnRelease": {
         "name": "Reset position on release",
-        "hint": "When enabled, portraits return to their automatic position unless the configured keep-position key is held on release. When disabled, portraits keep the dragged position and tilt until the next refresh unless that key is held on release."
+        "hint": "When enabled, portraits return to their automatic position unless the configured keep-position key is held on release. When disabled, portraits keep their manual position, scale, and tilt; hold that key on release or double-click the portrait to reset them."
       },
       "portraitDragMinScale": {
         "name": "Portrait drag: minimum scale",
