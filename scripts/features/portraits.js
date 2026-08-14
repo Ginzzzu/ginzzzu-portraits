@@ -2934,6 +2934,16 @@ function _onPortraitClick(ev) {
     const el = map.get(actorId);
     if (!el) return;
 
+    // Keep a stable reference to the wrapper. An emotion image transition may
+    // replace `el` before the hide timeout fires, leaving the replacement in
+    // the DOM if we try to find the wrapper through the old image later.
+    const wrapper = el.closest(".ginzzzu-portrait-wrapper");
+    if (wrapper) {
+      wrapper.dataset.threeoPortraitClosing = "1";
+      // Invalidate a transition which may already be waiting on image decode.
+      wrapper.dataset.threeoEmotionTransitionToken = `closing:${Date.now()}:${Math.random()}`;
+    }
+
     if (_focusedActorId === actorId) {
       setSharedPortraitFocus(null);
     }
@@ -2952,7 +2962,8 @@ function _onPortraitClick(ev) {
 
           if (canEdit) {
             actor.update({
-              [FLAG_PORTRAIT_EMOTION]: null
+              [FLAG_PORTRAIT_EMOTION]: null,
+              [FLAG_EMOTION_HEIGHT_MULTIPLIER]: null
             }).catch(e => console.error("[ginzzzu-portraits] failed to reset emotion:", e));
           }
         }
@@ -2962,13 +2973,17 @@ function _onPortraitClick(ev) {
     }
 
     // Анимация удаляемого
-    el.style.transform = "translateY(12px)";
-    el.style.opacity = "0";
+    const closingImages = wrapper
+      ? Array.from(wrapper.querySelectorAll("img.ginzzzu-portrait"))
+      : [el];
+    for (const image of closingImages) {
+      image.style.transform = "translateY(12px)";
+      image.style.opacity = "0";
+    }
 
     const timeout = Math.max(_ANIM.fadeMs, _ANIM.moveMs) + 80;
     setTimeout(() => {
       try {
-        const wrapper = el.parentElement;
         if (wrapper && wrapper.classList.contains("ginzzzu-portrait-wrapper")) {
           wrapper.remove();
         } else {
@@ -2984,8 +2999,12 @@ function _onPortraitClick(ev) {
           if (b) b.remove();
         }
       } catch (e) {}
-      map.delete(actorId);
-      removePortraitLayer(actorId);
+      const currentEl = map.get(actorId);
+      const removedCurrentPortrait = !currentEl || currentEl === el || !!wrapper?.contains(currentEl);
+      if (removedCurrentPortrait) {
+        map.delete(actorId);
+        removePortraitLayer(actorId);
+      }
       relayoutDomHud(firstRects);
       // Remove blur effect if no more portraits are active
       removeBlur();
@@ -2993,7 +3012,7 @@ function _onPortraitClick(ev) {
   }
 
   async function _applyEmotionImageWithTransition(wrapper, imgEl, newSrc) {
-      if (!wrapper || !imgEl || !newSrc) return;
+      if (!wrapper || !imgEl || !newSrc || wrapper.dataset.threeoPortraitClosing === "1") return;
 
       const duration = Number(game.settings.get(MODULE_ID, "emotionImageTransitionMs")) || 0;
       const lockKey = "threeoEmotionTransitionToken";
@@ -3088,12 +3107,14 @@ function _onPortraitClick(ev) {
 
       // If another transition started meanwhile, abort to avoid stomping it
       if (wrapper.dataset[lockKey] !== token) {
-        // restore transition/will-change cleanup
-        imgEl.style.transition = prevTransition;
-        imgEl.style.transform = prevTransform;
-        if (prevOpacity) imgEl.style.opacity = prevOpacity;
-        else imgEl.style.removeProperty("opacity");
-        try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        // Do not make an image visible again while its portrait is closing.
+        if (wrapper.dataset.threeoPortraitClosing !== "1") {
+          imgEl.style.transition = prevTransition;
+          imgEl.style.transform = prevTransform;
+          if (prevOpacity) imgEl.style.opacity = prevOpacity;
+          else imgEl.style.removeProperty("opacity");
+          try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        }
         return;
       }
 
@@ -3147,11 +3168,13 @@ function _onPortraitClick(ev) {
 
       if (wrapper.dataset[lockKey] !== token) {
         try { newImgEl.remove(); } catch (e) {}
-        imgEl.style.transition = prevTransition;
-        imgEl.style.transform = prevTransform;
-        if (prevOpacity) imgEl.style.opacity = prevOpacity;
-        else imgEl.style.removeProperty("opacity");
-        try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        if (wrapper.dataset.threeoPortraitClosing !== "1") {
+          imgEl.style.transition = prevTransition;
+          imgEl.style.transform = prevTransform;
+          if (prevOpacity) imgEl.style.opacity = prevOpacity;
+          else imgEl.style.removeProperty("opacity");
+          try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        }
         return;
       }
 
@@ -3168,11 +3191,13 @@ function _onPortraitClick(ev) {
 
       if (wrapper.dataset[lockKey] !== token) {
         try { newImgEl.remove(); } catch (e) {}
-        imgEl.style.transition = prevTransition;
-        imgEl.style.transform = prevTransform;
-        if (prevOpacity) imgEl.style.opacity = prevOpacity;
-        else imgEl.style.removeProperty("opacity");
-        try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        if (wrapper.dataset.threeoPortraitClosing !== "1") {
+          imgEl.style.transition = prevTransition;
+          imgEl.style.transform = prevTransform;
+          if (prevOpacity) imgEl.style.opacity = prevOpacity;
+          else imgEl.style.removeProperty("opacity");
+          try { imgEl.style.willChange = prevWillChange; } catch (e) {}
+        }
         return;
       }
 
