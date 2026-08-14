@@ -4,94 +4,18 @@ import {
   PORTRAIT_KEYBINDINGS,
   isPortraitControlKeyActive
 } from "../keybindings.js";
+import {
+  actorUpdateTouchesPortraitBaseImage,
+  getActorPortraitDisplayName,
+  getActorPortraitImage
+} from "../core/portraitPresentation.js";
 
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
 (()=>{
-  // Preferable actor image property paths (configurable)
-  function _parsePathsCSV(v) {
-    return String(v ?? "").split(",").map(s => s.trim()).filter(Boolean);
-  }
-  function _getActorBaseImage(actor) {
-    if (!actor) return "";
-    try {
-      const csv = game.settings.get(MODULE_ID, "actorImagePaths"); // CSV of dot-paths
-      const paths = _parsePathsCSV(csv);
-      for (const path of paths) {
-        const v = foundry.utils.getProperty(actor, path);
-        if (typeof v === "string" && v) return v;
-      }
-    } catch {}
-    // Fallbacks
-    return actor.img || actor.prototypeToken?.texture?.src || actor?.texture?.src || "";
-  }
-
-  /**
-   * Get current portrait image for actor, taking into account custom emotions.
-   * If a custom emotion with a non-empty imagePath is active, that path overrides the base image.
-   * If no emotion is active, the custom portrait image (if set) overrides the base image.
-   */
-  function _getActorImage(actor) {
-    if (!actor) return "";
-
-    // 1) Базовая картинка по стандартным правилам
-    const baseImg = _getActorBaseImage(actor);
-
-    // 2) Пытаемся переопределить её картинкой кастомной эмоции (если есть)
-    try {
-      // Текущий ключ эмоции для актёра (например "joy", "custom_0", "none")
-      const rawKey = foundry.utils.getProperty(actor, FLAG_PORTRAIT_EMOTION);
-      const emoKey = rawKey == null ? "none" : String(rawKey);
-
-      // Интересуют только custom_* эмоции
-      const m = /^custom_(\d+)$/.exec(emoKey);
-      if (!m) {
-        // Нет активной кастомной эмоции, проверяем кастомное изображение портрета
-        const customPortraitImg = foundry.utils.getProperty(actor, FLAG_PORTRAIT_CUSTOM_IMAGE);
-        if (typeof customPortraitImg === "string" && customPortraitImg.trim().length > 0) {
-          return customPortraitImg.trim();
-        }
-        return baseImg;
-      }
-
-      const idx = Number(m[1]);
-      if (!Number.isInteger(idx) || idx < 0) {
-        // Кастомная эмоция не найдена, используем кастомное изображение портрета если есть
-        const customPortraitImg = foundry.utils.getProperty(actor, FLAG_PORTRAIT_CUSTOM_IMAGE);
-        if (typeof customPortraitImg === "string" && customPortraitImg.trim().length > 0) {
-          return customPortraitImg.trim();
-        }
-        return baseImg;
-      }
-
-      const customEmotions = foundry.utils.getProperty(actor, FLAG_CUSTOM_EMOTIONS) || [];
-      if (!Array.isArray(customEmotions) || !customEmotions[idx]) {
-        // Кастомная эмоция не найдена, используем кастомное изображение портрета если есть
-        const customPortraitImg = foundry.utils.getProperty(actor, FLAG_PORTRAIT_CUSTOM_IMAGE);
-        if (typeof customPortraitImg === "string" && customPortraitImg.trim().length > 0) {
-          return customPortraitImg.trim();
-        }
-        return baseImg;
-      }
-
-      const path = customEmotions[idx]?.imagePath;
-      if (typeof path === "string" && path.trim().length > 0) {
-        return path.trim();
-      }
-
-      // Кастомная эмоция активна, но без картинки - используем кастомное изображение портрета если есть
-      const customPortraitImg = foundry.utils.getProperty(actor, FLAG_PORTRAIT_CUSTOM_IMAGE);
-      if (typeof customPortraitImg === "string" && customPortraitImg.trim().length > 0) {
-        return customPortraitImg.trim();
-      }
-    } catch (e) {
-      console.error("[threeO-portraits] Failed to resolve custom emotion image:", e);
-    }
-
-    return baseImg;
-  }
+  const _getActorImage = getActorPortraitImage;
 
   // ---- Adaptive tone (по темноте сцены) ----
 function _toneClamp01(value) {
@@ -3340,47 +3264,42 @@ function _onPortraitClick(ev) {
 
     if (!displayNameChanged) return;
 
-    const root = getDomHud?.();
+    const root = document.getElementById("ginzzzu-portrait-layer");
     if (!root) return;
 
     const actorId = actor.id;
-    const wrappers = root.querySelectorAll(".ginzzzu-portrait-wrapper");
+    const wrapper = root.querySelector(`.ginzzzu-portrait-wrapper[data-actor-id="${actorId}"]`);
+    if (!wrapper) return;
 
-    for (const wrapper of wrappers) {
-      if (wrapper.dataset.actorId !== actorId) continue;
+    const rawName = actor.name || "";
+    const displayName = _getDisplayName(actor);
 
-      const rawName = actor.name || "";
-      const displayName = _getDisplayName(actor);
+    // сохраняем "сырое" имя и публичное
+    wrapper.dataset.rawName = rawName;
+    wrapper.dataset.displayName = displayName || "";
 
-      // сохраняем "сырое" имя и публичное
-      wrapper.dataset.rawName = rawName;
-      wrapper.dataset.displayName = displayName || "";
-
-      // обновляем текст плашки (badges live in names container)
-      try {
-        const namesContainer = root.querySelector('#ginzzzu-portrait-names');
-        const badge = namesContainer ? namesContainer.querySelector(`.ginzzzu-portrait-name[data-actor-id="${actorId}"]`) : null;
-        if (badge) {
-          let innerEl = badge.querySelector('.ginzzzu-portrait-name-inner');
-          if (!innerEl) {
-            innerEl = document.createElement('span');
-            innerEl.className = 'ginzzzu-portrait-name-inner';
-            badge.textContent = '';
-            badge.appendChild(innerEl);
-          }
-          innerEl.textContent = displayName || rawName || "";
+    // обновляем текст плашки (badges live in names container)
+    try {
+      const namesContainer = root.querySelector('#ginzzzu-portrait-names');
+      const badge = namesContainer ? namesContainer.querySelector(`.ginzzzu-portrait-name[data-actor-id="${actorId}"]`) : null;
+      if (badge) {
+        let innerEl = badge.querySelector('.ginzzzu-portrait-name-inner');
+        if (!innerEl) {
+          innerEl = document.createElement('span');
+          innerEl.className = 'ginzzzu-portrait-name-inner';
+          badge.textContent = '';
+          badge.appendChild(innerEl);
         }
-      } catch (e) {}
-
-      // обновляем alt у картинки
-      const img = wrapper.querySelector("img.ginzzzu-portrait");
-      if (img) {
-        img.dataset.rawName = rawName;
-        img.alt = displayName || rawName || "Portrait";
+        innerEl.textContent = displayName || rawName || "";
       }
-    }
+    } catch (e) {}
 
-    globalThis.GinzzzuPortraits.refreshDisplayNames();
+    // обновляем alt у картинки
+    const img = wrapper.querySelector("img.ginzzzu-portrait");
+    if (img) {
+      img.dataset.rawName = rawName;
+      img.alt = displayName || rawName || "Portrait";
+    }
   });
 
 let portraitSocketHandlersRegistered = false;
@@ -3456,10 +3375,7 @@ Hooks.once("ready", () => {
       let shown = foundry.utils.getProperty(actor, FLAG_PORTRAIT_SHOWN);
       if (typeof shown !== "undefined" && shown) {
         const img = _getActorImage(actor);
-
-        const rawDisplayName = foundry.utils.getProperty(actor, FLAG_DISPLAY_NAME) ?? "";
-        const customName = typeof rawDisplayName === "string" ? rawDisplayName : "";
-        const name = customName || actor.name || "Portrait";
+        const name = getActorDisplayName(actor);
 
         openLocalPortrait({ actorId: actor.id, img, name });
       }
@@ -3484,8 +3400,9 @@ Hooks.once("ready", () => {
       const emotionHeightMultiplierChanged = foundry.utils.hasProperty(changes, FLAG_EMOTION_HEIGHT_MULTIPLIER);
       const customImageChanged = foundry.utils.hasProperty(changes, FLAG_PORTRAIT_CUSTOM_IMAGE);
       const breathingMultiplierChanged = foundry.utils.hasProperty(changes, FLAG_PORTRAIT_BREATHING_MULTIPLIER);
+      const baseImageChanged = actorUpdateTouchesPortraitBaseImage(changes);
 
-      if (!emotionChanged && !customEmotionsChanged && !heightMultiplierChanged && !emotionHeightMultiplierChanged && !customImageChanged && !breathingMultiplierChanged) return;
+      if (!emotionChanged && !customEmotionsChanged && !heightMultiplierChanged && !emotionHeightMultiplierChanged && !customImageChanged && !breathingMultiplierChanged && !baseImageChanged) return;
 
       // Only touch the HUD after confirming this Actor update is relevant.
       // PF2e sheets can emit frequent, deeply nested updates while editing.
@@ -3666,36 +3583,7 @@ Hooks.once("ready", () => {
       return;
     }
 
-    // 1. Проверяем активную эмоцию и её имя (наивысший приоритет)
-    try {
-      const currentEmoKey = foundry.utils.getProperty(actor, FLAG_PORTRAIT_EMOTION);
-      if (currentEmoKey && currentEmoKey !== "none") {
-        // Проверяем, является ли это кастомной эмоцией
-        const m = /^custom_(\d+)$/.exec(String(currentEmoKey));
-        if (m) {
-          const idx = Number(m[1]);
-          const customEmotions = foundry.utils.getProperty(actor, FLAG_CUSTOM_EMOTIONS) || [];
-          if (Array.isArray(customEmotions) && customEmotions[idx]) {
-            const emotionDisplayName = customEmotions[idx].displayName;
-            if (typeof emotionDisplayName === "string" && emotionDisplayName.trim().length > 0) {
-              return emotionDisplayName.trim();
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error("[threeO-portraits] Error checking emotion display name:", e);
-    }
-
-    // 2. Проверяем кастомное имя из FLAG_DISPLAY_NAME (средний приоритет)
-    const rawDisplayName = foundry.utils.getProperty(actor, FLAG_DISPLAY_NAME) ?? "";
-    const customName = typeof rawDisplayName === "string" ? rawDisplayName.trim() : "";
-    if (customName.length > 0) {
-      return customName;
-    }
-
-    // 3. Используем реальное имя персонажа (низкий приоритет)
-    return actor.name || "Portrait";
+    return getActorPortraitDisplayName(actor);
   }
 
 
@@ -3873,6 +3761,9 @@ Hooks.once("ready", () => {
 
 // === System-agnostic UI controls (directory + token HUD) ===
 
+function registerGmActorUiHooks() {
+  if (!game.user?.isGM) return;
+
 Hooks.on("getActorContextOptions", async (app, menuItems) => {
   if (!game.user.isGM) {
     return;
@@ -4006,6 +3897,9 @@ Hooks.on("getHeaderControlsDocumentSheetV2", (app, buttons) => {
   }
   buttons.unshift(...theatreButtons);
 });
+}
+
+Hooks.once("ready", registerGmActorUiHooks);
 
 function normalizePortraitSequence(sequence) {
   if (!Array.isArray(sequence)) return [];

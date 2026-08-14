@@ -5,15 +5,30 @@ import {
   isPortraitControlKeyActive
 } from "../keybindings.js";
 import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/index.js";
+import {
+  actorUpdateTouchesPortraitBaseImage,
+  getActorPortraitDisplayName,
+  getActorPortraitImage
+} from "../core/portraitPresentation.js";
 
 (()=>{
+  const isGmClient = () => !!game.user?.isGM;
+
   // ── Actor type utilities (configurable) ─────────────────────────────────────
   function parseCSVTypes(v) {
     return new Set(String(v ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean));
   }
   const DOCK_REBUILD_MODULE_FLAGS = new Set(["favorite", "pcFavorite"]);
+  const DOCK_SYNCED_PREVIEW_MODULE_FLAGS = new Set([
+    "portraitEmotion",
+    "customEmotions",
+    "portraitCustomImage"
+  ]);
+  const DOCK_FALLBACK_IMAGE = "icons/svg/mystery-man.svg";
   let cachedNPCTypes = null;
   let cachedPCTypes = null;
+  let updateDockPreviewsEnabledCache = null;
+  const dockPreviewCache = new Map();
 
   function invalidateActorTypeCaches() {
     cachedNPCTypes = null;
@@ -62,6 +77,20 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     }
     return keys;
   }
+
+  function hasChangedModuleFlag(keys, flag) {
+    for (const key of keys) {
+      if (key === flag || key.startsWith(`${flag}.`)) return true;
+    }
+    return false;
+  }
+
+  function hasAnyChangedModuleFlag(keys, flags) {
+    for (const flag of flags) {
+      if (hasChangedModuleFlag(keys, flag)) return true;
+    }
+    return false;
+  }
   function isNPC(a) {
     const t = String(a?.type ?? "").toLowerCase();
     const types = getNPCTypes();
@@ -92,6 +121,15 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
   const setIsCollapsed = (v) => { try { game.settings.set(MODULE_ID, "npcDockCollapsed", v); } catch {} };
   const getShowActivePortraits = () => { try { return !!game.settings.get(MODULE_ID, "showActivePortraits"); } catch { return true; } };
   const setShowActivePortraits = (v) => { try { game.settings.set(MODULE_ID, "showActivePortraits", !!v); } catch {} };
+  const getUpdateDockPreviews = () => {
+    if (updateDockPreviewsEnabledCache !== null) return updateDockPreviewsEnabledCache;
+    try {
+      updateDockPreviewsEnabledCache = game.settings.get(MODULE_ID, "updateDockPreviews") !== false;
+    } catch {
+      updateDockPreviewsEnabledCache = true;
+    }
+    return updateDockPreviewsEnabledCache;
+  };
   const getPCFolderSel  = () => { try { return game.settings.get(MODULE_ID, "pcDockFolder") || "all"; } catch { return "all"; } };
   const setPCFolderSel  = (v) => { try { game.settings.set(MODULE_ID, "pcDockFolder", v); } catch {} };
   const getNpcDockWidth = () => { try { return game.settings.get(MODULE_ID, "npcDockWidth") || 40; } catch { return 40; } };
@@ -111,6 +149,7 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
   // Helper to apply NPC dock layout settings
   function applyNpcDockLayout() {
+    if (!isGmClient()) return;
     const root = document.getElementById(DOCK_ID);
     if (root) {
       const width = getNpcDockWidth();
@@ -163,9 +202,8 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     return names.join(" / ");
   }
 
-  function makeTooltip(actor) {
-    // Берём кастомное отображаемое имя, если оно есть
-    const name = (actor.name || "");
+  function makeTooltip(actor, previewName = actor?.name || "") {
+    const name = previewName || "";
 
     // Если имени нет вообще — не показываем подсказку
     if (!name) return "";
@@ -174,10 +212,85 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     return folderPath ? `${name}\n${folderPath}` : name;
   }
 
-  function getDockDisplayName(actor) {
+  function getLegacyDockDisplayName(actor) {
     const rawDisplayName = foundry.utils.getProperty(actor, FLAG_DISPLAY_NAME) ?? "";
     const customName = typeof rawDisplayName === "string" ? rawDisplayName.trim() : "";
     return customName || actor?.name || "";
+  }
+
+  function resolveDockPreview(actor) {
+    const legacyName = getLegacyDockDisplayName(actor);
+    if (!getUpdateDockPreviews()) {
+      return {
+        image: actor?.img || actor?.prototypeToken?.texture?.src || DOCK_FALLBACK_IMAGE,
+        displayName: legacyName,
+        accessibleName: actor?.name || legacyName,
+        tooltipName: actor?.name || legacyName
+      };
+    }
+
+    const displayName = getActorPortraitDisplayName(actor, legacyName || "Portrait");
+    return {
+      image: getActorPortraitImage(actor) || DOCK_FALLBACK_IMAGE,
+      displayName,
+      accessibleName: displayName,
+      tooltipName: displayName
+    };
+  }
+
+  function getDockPreview(actor) {
+    const actorId = actor?.id;
+    if (!actorId) return resolveDockPreview(actor);
+    if (!dockPreviewCache.has(actorId)) {
+      dockPreviewCache.set(actorId, resolveDockPreview(actor));
+    }
+    return dockPreviewCache.get(actorId);
+  }
+
+  function applyDockPreviewToElement(element, actor) {
+    if (!element || !actor) return;
+    const preview = getDockPreview(actor);
+    const image = element.querySelector("img");
+    if (image) {
+      if (image.getAttribute("src") !== preview.image) image.src = preview.image;
+      if (image.alt !== preview.accessibleName) image.alt = preview.accessibleName;
+    }
+
+    const label = element.querySelector(".npc-label");
+    if (label && label.textContent !== preview.displayName) {
+      label.textContent = preview.displayName;
+    }
+
+    const tooltip = makeTooltip(actor, preview.tooltipName);
+    if (element.title !== tooltip) element.title = tooltip;
+  }
+
+  function refreshActorDockPreview(actor) {
+    if (!isGmClient() || !actor?.id) return;
+    dockPreviewCache.delete(actor.id);
+
+    const root = document.getElementById(DOCK_ID);
+    if (!root) return;
+    const actorId = String(actor.id);
+    const escapedActorId = globalThis.CSS?.escape
+      ? globalThis.CSS.escape(actorId)
+      : actorId.replace(/["\\]/g, "\\$&");
+    for (const element of root.querySelectorAll(`[data-actor-id="${escapedActorId}"]`)) {
+      applyDockPreviewToElement(element, actor);
+    }
+  }
+
+  function refreshAllDockPreviews() {
+    updateDockPreviewsEnabledCache = null;
+    dockPreviewCache.clear();
+    if (!isGmClient()) return;
+
+    const root = document.getElementById(DOCK_ID);
+    if (!root) return;
+    for (const element of root.querySelectorAll("[data-actor-id]")) {
+      const actor = game.actors?.get(element.dataset.actorId);
+      if (actor) applyDockPreviewToElement(element, actor);
+    }
   }
 
   function collectActorFoldersWithPC() {
@@ -210,6 +323,7 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
   // ── DOM ─────────────────────────────────────────────────────────────────────
   function ensureDock() {
+    if (!isGmClient()) return null;
     let root = document.getElementById(DOCK_ID);
     if (root) return root;
 
@@ -494,16 +608,17 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     });
     const fragment = document.createDocumentFragment();
     for (const a of pcs) {
+      const preview = getDockPreview(a);
       const btn = document.createElement("div");
       btn.className = "item";
       btn.dataset.actorId = a.id;
-      btn.title = makeTooltip(a);
+      btn.title = makeTooltip(a, preview.tooltipName);
       // PC favorite flag (middle click)
       const FLAG_FAV_PC = `flags.${MODULE_ID}.pcFavorite`;
 
       const img = document.createElement("img");
-      img.src = a.img || a.prototypeToken?.texture?.src || "icons/svg/mystery-man.svg";
-      img.alt = a.name || "Player";
+      img.src = preview.image;
+      img.alt = preview.accessibleName || "Player";
       btn.appendChild(img);
 
       // Make card draggable to allow dropping an Actor onto the canvas
@@ -632,20 +747,20 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     // рендер только обычных NPC
     const fragment = document.createDocumentFragment();
     for (const a of rest) {
+      const preview = getDockPreview(a);
       const btn = document.createElement("div");
       btn.className = "item";
       btn.dataset.actorId = a.id;
-      btn.title = makeTooltip(a);
+      btn.title = makeTooltip(a, preview.tooltipName);
 
       const img = document.createElement("img");
-      img.src = a.img || a.prototypeToken?.texture?.src || "icons/svg/mystery-man.svg";
-      img.alt = a.name || "NPC";
+      img.src = preview.image;
+      img.alt = preview.accessibleName || "NPC";
       btn.appendChild(img);
 
-      const displayName = getDockDisplayName(a);
       const label = document.createElement("div");
       label.className = "npc-label";
-      label.textContent = displayName || "";
+      label.textContent = preview.displayName || "";
       btn.appendChild(label);
 
       const shown = !!foundry.utils.getProperty(a, FLAG_PORTRAIT_SHOWN);
@@ -699,14 +814,15 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
     const fragment = document.createDocumentFragment();
     for (const a of favs) {
+      const preview = getDockPreview(a);
       const btn = document.createElement("div");
       btn.className = "item";
       btn.dataset.actorId = a.id;
-      btn.title = makeTooltip(a);
+      btn.title = makeTooltip(a, preview.tooltipName);
 
       const img = document.createElement("img");
-      img.src = a.img || a.prototypeToken?.texture?.src || "icons/svg/mystery-man.svg";
-      img.alt = a.name || "NPC";
+      img.src = preview.image;
+      img.alt = preview.accessibleName || "NPC";
       btn.appendChild(img);
 
       // включён ли портрет
@@ -775,14 +891,15 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
       const fragment = document.createDocumentFragment();
       for (const a of active) {
+        const preview = getDockPreview(a);
         const btn = document.createElement('div');
         btn.className = 'dock-icon';
         btn.dataset.actorId = a.id;
-        btn.title = makeTooltip(a) || (a.name || "");
+        btn.title = makeTooltip(a, preview.tooltipName) || preview.accessibleName;
 
         const img = document.createElement('img');
-        img.src = a.img || a.prototypeToken?.texture?.src || 'icons/svg/mystery-man.svg';
-        img.alt = a.name || '';
+        img.src = preview.image;
+        img.alt = preview.accessibleName || '';
         img.draggable = false;
         btn.appendChild(img);
 
@@ -826,7 +943,7 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
   // Построение всего дока
   function buildDock() {
-    if (!game.user?.isGM) return;
+    if (!isGmClient()) return;
     const root = ensureDock();
     applyNpcDockLayout();
     // rebuild mini-dock first so it's visible above the toolbar (only if enabled)
@@ -877,9 +994,9 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
   // Подсветка карточки по изменению флага (и для NPC, и для PLAYER)
   function reflectActorFlag(actor) {
-    if (!actor) return;
+    if (!isGmClient() || !actor) return;
     const shown = !!foundry.utils.getProperty(actor, FLAG_PORTRAIT_SHOWN);
-    const tooltip = makeTooltip(actor);
+    const tooltip = makeTooltip(actor, getDockPreview(actor).tooltipName);
     for (const el of document.querySelectorAll(`#${DOCK_ID} .item[data-actor-id="${actor.id}"]`)) {
       if (el.classList.contains("is-on") !== shown)
         el.classList.toggle("is-on", shown);
@@ -905,11 +1022,42 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
 
   // дебаунс перестроения
   let rebuildTimer = null;
-  function scheduleRebuild(delay = 60) { clearTimeout(rebuildTimer); rebuildTimer = setTimeout(buildDock, delay); }
+  function scheduleRebuild(delay = 60) {
+    if (!isGmClient()) return;
+    clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(buildDock, delay);
+  }
+
+  function handleActorDockUpdate(actor, diff) {
+    if (!isGmClient()) return;
+    const portraitShownChanged = foundry.utils.hasProperty(diff, FLAG_PORTRAIT_SHOWN);
+    if (portraitShownChanged)
+      reflectActorFlag(actor);
+
+    const moduleFlagKeys = getChangedModuleFlagKeys(diff);
+    const nameChanged = hasChangedPath(diff, "name");
+    const baseImageChanged = actorUpdateTouchesPortraitBaseImage(diff);
+    const displayNameChanged = hasChangedModuleFlag(moduleFlagKeys, "displayName");
+    const syncedPreviewChanged = getUpdateDockPreviews() &&
+      hasAnyChangedModuleFlag(moduleFlagKeys, DOCK_SYNCED_PREVIEW_MODULE_FLAGS);
+
+    if (nameChanged || baseImageChanged || displayNameChanged || syncedPreviewChanged) {
+      refreshActorDockPreview(actor);
+    }
+
+    // Name affects sorting/search; type and folder affect dock membership.
+    // Image/emotion changes are handled above without rebuilding the dock.
+    const structuralPaths = ["name", "type", "folder"];
+    if (structuralPaths.some(path => hasChangedPath(diff, path)))
+      scheduleRebuild();
+
+    if (hasAnyChangedModuleFlag(moduleFlagKeys, DOCK_REBUILD_MODULE_FLAGS))
+      scheduleRebuild();
+  }
 
   // ── Hooks ────────────────────────────────────────────────────────────────────
   Hooks.once("ready", () => {
-    if (!game.user?.isGM) 
+    if (!isGmClient())
       return;
 
     ensureDock();
@@ -933,21 +1081,12 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     });
 
     // актёры
-    Hooks.on("createActor", (a) => { scheduleRebuild(); });
-    Hooks.on("deleteActor", (a) => { scheduleRebuild(); });
-    Hooks.on("updateActor", (actor, diff) => {
-      const portraitShownChanged = foundry.utils.hasProperty(diff, FLAG_PORTRAIT_SHOWN);
-      if (portraitShownChanged)
-        reflectActorFlag(actor);
-
-      const rel = ["name", "img", "type", "prototypeToken.texture.src", "folder"];
-      if (rel.some(path => hasChangedPath(diff, path)))
-        scheduleRebuild();
-
-      const moduleFlagKeys = getChangedModuleFlagKeys(diff);
-      if ([...moduleFlagKeys].some(key => DOCK_REBUILD_MODULE_FLAGS.has(key)))
-        scheduleRebuild();
+    Hooks.on("createActor", () => { scheduleRebuild(); });
+    Hooks.on("deleteActor", (actor) => {
+      if (actor?.id) dockPreviewCache.delete(actor.id);
+      scheduleRebuild();
     });
+    Hooks.on("updateActor", handleActorDockUpdate);
 
 
     // папки
@@ -976,6 +1115,7 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
   }
   
   function setDashboard(options) {
+    if (!isGmClient()) return;
     if (options) {
       if (options.folder) {
         selectMatching(folderEl, options.folder);
@@ -995,7 +1135,8 @@ import { addNpcDockOptions, filterNpcs, getFilterCriteria } from "./systems/inde
     setDashboard,
     rebuild: buildDock,
     refreshDisplayNames: () => buildDock(),
-    show: () => { const r = ensureDock(); r.style.display = ""; },
-    hide: () => { const r = ensureDock(); r.style.display = "none"; }
+    refreshPreviews: refreshAllDockPreviews,
+    show: () => { const root = ensureDock(); if (root) root.style.display = ""; },
+    hide: () => { const root = ensureDock(); if (root) root.style.display = "none"; }
   };
 })();

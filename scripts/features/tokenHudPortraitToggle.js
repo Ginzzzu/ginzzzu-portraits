@@ -81,6 +81,8 @@ function ensureButton(hud, html) {
 }
 
 export function registerTokenHudPortraitToggle() {
+  if (!game.user?.isGM) return;
+
   Hooks.on("renderTokenHUD", (hud, html) => {
     try {
       ensureButton(hud, html);
@@ -91,5 +93,6 @@ export function registerTokenHudPortraitToggle() {
 }
 
 Hooks.once("ready", () => {
+  if (!game.user?.isGM) return;
   registerTokenHudPortraitToggle();
 });

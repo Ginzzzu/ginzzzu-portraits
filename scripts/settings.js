@@ -212,8 +212,14 @@ const SETTINGS_GROUPS = [
   {
     id: "quick",
     keys: [
-      "hidePortraits",
-      "performanceMode"
+      "hidePortraits"
+    ]
+  },
+  {
+    id: "performance",
+    keys: [
+      "performanceMode",
+      "updateDockPreviews"
     ]
   },
   {
@@ -429,6 +435,17 @@ Hooks.once("init", () => {
     type: Boolean,
     default: false,
     requiresReload: true
+  });
+
+  reg("updateDockPreviews", {
+    name: game.i18n.localize("GINZZZUPORTRAITS.Settings.updateDockPreviews.name"),
+    hint: game.i18n.localize("GINZZZUPORTRAITS.Settings.updateDockPreviews.hint"),
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true,
+    requiresReload: false,
+    onChange: () => globalThis.GinzzzuNPCDock?.refreshPreviews?.()
   });
 
   // === Player Dock: фильтр папок игроков (мир / World) ===
@@ -1163,6 +1180,8 @@ function applyPerformanceModeClass() {
 
 Hooks.once("ready", () => {
   applyPerformanceModeClass();
+  if (!game.user?.isGM) return;
+
   try {
     const settingKey = `${MODULE_ID}.pcDockFolder`;
     const setting = game.settings.settings.get(settingKey);

@@ -354,6 +354,10 @@
         "name": "Performance mode",
         "hint": "Disables background and panel blur effects on this client to improve performance."
       },
+      "updateDockPreviews": {
+        "name": "NPC Dock: update portrait previews",
+        "hint": "Keeps dock art and display names matched to exactly what players will see when a portrait is shown, including custom portrait art and image emotions. Only affected cards are updated."
+      },
       "pcDockFolder": {
         "name": "NPC Dock: player panel folder",
         "hint": "Controls which Actor folder is used for the Player Characters panel in the NPC dock. \"All players\" shows actors from all folders; \"Players without folder\" shows only actors that are not in any folder."
@@ -367,6 +371,10 @@
       "quick": {
         "title": "Quick client options",
         "hint": "Personal switches that affect only how this client sees the module."
+      },
+      "performance": {
+        "title": "Performance",
+        "hint": "Controls optional visual work and efficient live preview updates on this client."
       },
       "npcDock": {
         "title": "NPC Dock and player panel",
